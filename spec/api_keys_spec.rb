@@ -1,0 +1,251 @@
+# frozen_string_literal: true
+
+RSpec.describe "API Keys" do
+  context 'static api_key' do
+    before do
+      Sendio.configure do |config|
+        config.api_key = "mx_123"
+      end
+    end
+
+    describe "create" do
+
+      it "should create api key" do
+        resp = {
+          "id": "dacf4072-4119-4d88-932f-6202748ac7c8",
+          "token": "mx_c1tpEyD8_NKFusih9vKVQknRAQfmFcWCv"
+        }
+        params = {
+          "name": "production"
+        }
+        allow_any_instance_of(Sendio::Request).to receive(:perform).and_return(resp)
+        expect(Sendio::ApiKeys.create(params)[:id]).to eql("dacf4072-4119-4d88-932f-6202748ac7c8")
+      end
+
+      it "should raise when permission is invalid" do
+        resp = {
+          "statusCode" => 422,
+          "name" => "invalid_permission",
+          "message" => "Access must be 'full_access' | 'sending_access'"
+        }
+        allow(resp).to receive(:body).and_return(resp)
+        params = {
+          "name": "production",
+          "permission": "invalid"
+        }
+        allow(HTTParty).to receive(:send).and_return(resp)
+        expect { Sendio::ApiKeys.create params }.to raise_error(Sendio::Error::InvalidRequestError, /Access must be 'full_access' | 'sending_access'/)
+      end
+    end
+
+    describe "list" do
+      it "should list api keys" do
+        resp = {
+          "data": [
+            {
+              "id" => "6e3c3d83-05dc-4b51-acfc-fe8972738bd0",
+              "name" => "test1",
+              "created_at" => "2023-04-21T01:31:02.671414+00:00",
+              "last_used_at" => "2023-04-22T10:00:00+00:00"
+            },
+            {
+              "id" => "7f4d4e94-16ed-5c62-bdfd-gf9083849ce1",
+              "name" => "test2",
+              "created_at" => "2023-04-21T01:31:02.671414+00:00",
+              "last_used_at" => nil
+            }
+          ]
+        }
+        allow_any_instance_of(Sendio::Request).to receive(:perform).and_return(resp)
+        expect(Sendio::ApiKeys.list[:data].length).to eql(2)
+        expect(Sendio::ApiKeys.list[:data].first["last_used_at"]).to eql("2023-04-22T10:00:00+00:00")
+        expect(Sendio::ApiKeys.list[:data].last["last_used_at"]).to be_nil
+      end
+    end
+
+    describe "remove" do
+      it "should remove api key" do
+        allow_any_instance_of(Sendio::Request).to receive(:perform).and_return("")
+        expect { Sendio::ApiKeys.remove }.not_to raise_error
+      end
+    end
+
+    describe "update" do
+      it "should update api key" do
+        resp = {
+          "object": "api_key",
+          "id": "dacf4072-4119-4d88-932f-6202748ac7c8"
+        }
+        params = {
+          "id": "dacf4072-4119-4d88-932f-6202748ac7c8",
+          "name": "renamed key"
+        }
+        allow_any_instance_of(Sendio::Request).to receive(:perform).and_return(resp)
+        result = Sendio::ApiKeys.update(params)
+        expect(result[:id]).to eql("dacf4072-4119-4d88-932f-6202748ac7c8")
+        expect(result[:object]).to eql("api_key")
+      end
+
+      it "should raise when api key is not found" do
+        resp = {
+          "statusCode" => 404,
+          "name" => "not_found",
+          "message" => "Api key not found"
+        }
+        allow(resp).to receive(:body).and_return(resp)
+        params = {
+          "id": "invalid-id",
+          "name": "renamed key"
+        }
+        allow(HTTParty).to receive(:send).and_return(resp)
+        expect { Sendio::ApiKeys.update params }.to raise_error(Sendio::Error::NotFoundError, /Api key not found/)
+      end
+
+      it "should use PATCH /api-keys/:id" do
+        params = { id: "dacf4072-4119-4d88-932f-6202748ac7c8", name: "renamed key" }
+        req = double("req", perform: { id: params[:id] })
+        expect(Sendio::Request).to receive(:new).once do |path, _body, verb|
+          expect(path).to eql("api-keys/#{params[:id]}")
+          expect(verb).to eql("patch")
+          req
+        end
+        Sendio::ApiKeys.update(params)
+      end
+
+      it "should NOT include id in the request body" do
+        params = { id: "dacf4072-4119-4d88-932f-6202748ac7c8", name: "renamed key" }
+        req = double("req", perform: { id: params[:id] })
+        expect(Sendio::Request).to receive(:new).once do |_path, body, _verb|
+          expect(body).not_to have_key(:id)
+          expect(body[:name]).to eql("renamed key")
+          req
+        end
+        Sendio::ApiKeys.update(params)
+      end
+    end
+  end
+
+  context 'dynamic api_key' do
+    before do
+      Sendio.configure do |config|
+        config.api_key = -> { "mx_123" }
+      end
+    end
+
+    describe "create" do
+
+      it "should create api key" do
+        resp = {
+          "id": "dacf4072-4119-4d88-932f-6202748ac7c8",
+          "token": "mx_c1tpEyD8_NKFusih9vKVQknRAQfmFcWCv"
+        }
+        params = {
+          "name": "production"
+        }
+        allow_any_instance_of(Sendio::Request).to receive(:perform).and_return(resp)
+        expect(Sendio::ApiKeys.create(params)[:id]).to eql("dacf4072-4119-4d88-932f-6202748ac7c8")
+      end
+
+      it "should raise when permission is invalid" do
+        resp = {
+          "statusCode" => 422,
+          "name" => "invalid_permission",
+          "message" => "Access must be 'full_access' | 'sending_access'"
+        }
+        allow(resp).to receive(:body).and_return(resp)
+        params = {
+          "name": "production",
+          "permission": "invalid"
+        }
+        allow(HTTParty).to receive(:send).and_return(resp)
+        expect { Sendio::ApiKeys.create params }.to raise_error(Sendio::Error::InvalidRequestError, /Access must be 'full_access' | 'sending_access'/)
+      end
+    end
+
+    describe "list" do
+      it "should list api keys" do
+        resp = {
+          "data": [
+            {
+              "id" => "6e3c3d83-05dc-4b51-acfc-fe8972738bd0",
+              "name" => "test1",
+              "created_at" => "2023-04-21T01:31:02.671414+00:00",
+              "last_used_at" => "2023-04-22T10:00:00+00:00"
+            },
+            {
+              "id" => "7f4d4e94-16ed-5c62-bdfd-gf9083849ce1",
+              "name" => "test2",
+              "created_at" => "2023-04-21T01:31:02.671414+00:00",
+              "last_used_at" => nil
+            }
+          ]
+        }
+        allow_any_instance_of(Sendio::Request).to receive(:perform).and_return(resp)
+        expect(Sendio::ApiKeys.list[:data].length).to eql(2)
+        expect(Sendio::ApiKeys.list[:data].first["last_used_at"]).to eql("2023-04-22T10:00:00+00:00")
+        expect(Sendio::ApiKeys.list[:data].last["last_used_at"]).to be_nil
+      end
+    end
+
+    describe "remove" do
+      it "should remove api key" do
+        allow_any_instance_of(Sendio::Request).to receive(:perform).and_return("")
+        expect { Sendio::ApiKeys.remove }.not_to raise_error
+      end
+    end
+
+    describe "update" do
+      it "should update api key" do
+        resp = {
+          "object": "api_key",
+          "id": "dacf4072-4119-4d88-932f-6202748ac7c8"
+        }
+        params = {
+          "id": "dacf4072-4119-4d88-932f-6202748ac7c8",
+          "name": "renamed key"
+        }
+        allow_any_instance_of(Sendio::Request).to receive(:perform).and_return(resp)
+        result = Sendio::ApiKeys.update(params)
+        expect(result[:id]).to eql("dacf4072-4119-4d88-932f-6202748ac7c8")
+        expect(result[:object]).to eql("api_key")
+      end
+
+      it "should raise when api key is not found" do
+        resp = {
+          "statusCode" => 404,
+          "name" => "not_found",
+          "message" => "Api key not found"
+        }
+        allow(resp).to receive(:body).and_return(resp)
+        params = {
+          "id": "invalid-id",
+          "name": "renamed key"
+        }
+        allow(HTTParty).to receive(:send).and_return(resp)
+        expect { Sendio::ApiKeys.update params }.to raise_error(Sendio::Error::NotFoundError, /Api key not found/)
+      end
+
+      it "should use PATCH /api-keys/:id" do
+        params = { id: "dacf4072-4119-4d88-932f-6202748ac7c8", name: "renamed key" }
+        req = double("req", perform: { id: params[:id] })
+        expect(Sendio::Request).to receive(:new).once do |path, _body, verb|
+          expect(path).to eql("api-keys/#{params[:id]}")
+          expect(verb).to eql("patch")
+          req
+        end
+        Sendio::ApiKeys.update(params)
+      end
+
+      it "should NOT include id in the request body" do
+        params = { id: "dacf4072-4119-4d88-932f-6202748ac7c8", name: "renamed key" }
+        req = double("req", perform: { id: params[:id] })
+        expect(Sendio::Request).to receive(:new).once do |_path, body, _verb|
+          expect(body).not_to have_key(:id)
+          expect(body[:name]).to eql("renamed key")
+          req
+        end
+        Sendio::ApiKeys.update(params)
+      end
+    end
+  end
+end

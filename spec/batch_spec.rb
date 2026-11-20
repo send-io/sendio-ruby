@@ -1,0 +1,307 @@
+# frozen_string_literal: true
+
+RSpec.describe "Batch" do
+  describe "#send" do
+
+    before do
+      Sendio.api_key = "mx_123"
+    end
+
+    it "sends batch email" do
+      resp = {
+        "data": [
+          {
+            "id" => "ae2014de-c168-4c61-8267-70d2662a1ce1"
+          },
+          {
+            "id" => "faccb7a5-8a28-4e9a-ac64-8da1cc3bc1cb"
+          }
+        ]
+      }
+
+      params = [
+        {
+          "from": "from@e.io",
+          "to": ["email1@email.com"],
+          "text": "testing",
+          "subject": "Hey",
+        },
+        {
+          "from": "from@e.io",
+          "to": ["email2@email.com"],
+          "text": "testing",
+          "subject": "Hello",
+        },
+      ]
+      allow_any_instance_of(Sendio::Request).to receive(:perform).and_return(resp)
+      emails = Sendio::Batch.send(params)
+      expect(emails[:data].length).to eq 2
+    end
+
+    it "does not send the Idempotency-Key header when :idempotency_key is not provided" do
+      resp = {
+        "id"=>"872d1f17-0f08-424c-a18c-d425324acab6", "object": "email"
+      }
+
+      allow(resp).to receive(:body).and_return(resp)
+      allow(HTTParty).to receive(:send).and_return(resp)
+
+      Sendio::Batch.send([{ from: "me" }], options: {})
+
+      expect(HTTParty).to have_received(:send).with(
+        :post,
+        "#{Sendio::Request::BASE_URL}emails/batch",
+        {
+          headers: {
+            "Content-Type" => "application/json",
+            "Accept" => "application/json",
+            "Authorization" => "Bearer mx_123",
+            "User-Agent" => "sendio-ruby:#{Sendio::VERSION}",
+          },
+          body: [{ from: "me" }].to_json
+        }
+      )
+    end
+
+    it "does not send the Idempotency-Key header when :idempotency_key is nil" do
+      resp = {
+        "id"=>"872d1f17-0f08-424c-a18c-d425324acab6", "object": "email"
+      }
+
+      allow(resp).to receive(:body).and_return(resp)
+      allow(HTTParty).to receive(:send).and_return(resp)
+
+      Sendio::Batch.send([{ from: "me" }], options: { idempotency_key: nil })
+
+      expect(HTTParty).to have_received(:send).with(
+        :post,
+        "#{Sendio::Request::BASE_URL}emails/batch",
+        {
+          headers: {
+            "Content-Type" => "application/json",
+            "Accept" => "application/json",
+            "Authorization" => "Bearer mx_123",
+            "User-Agent" => "sendio-ruby:#{Sendio::VERSION}",
+          },
+          body: [{ from: "me" }].to_json
+        }
+      )
+    end
+
+    it "does not send the Idempotency-Key header when :idempotency_key is an empty string" do
+      resp = {
+        "id"=>"872d1f17-0f08-424c-a18c-d425324acab6", "object": "email"
+      }
+
+      allow(resp).to receive(:body).and_return(resp)
+      allow(HTTParty).to receive(:send).and_return(resp)
+
+      Sendio::Batch.send([{ from: "me" }], options: { idempotency_key: "" })
+
+      expect(HTTParty).to have_received(:send).with(
+        :post,
+        "#{Sendio::Request::BASE_URL}emails/batch",
+        {
+          headers: {
+            "Content-Type" => "application/json",
+            "Accept" => "application/json",
+            "Authorization" => "Bearer mx_123",
+            "User-Agent" => "sendio-ruby:#{Sendio::VERSION}",
+          },
+          body: [{ from: "me" }].to_json
+        }
+      )
+    end
+
+    it "does send the Idempotency-Key header when :idempotency_key is provided" do
+      resp = {
+        "id"=>"872d1f17-0f08-424c-a18c-d425324acab6", "object": "email"
+      }
+
+      allow(resp).to receive(:body).and_return(resp)
+      allow(HTTParty).to receive(:send).and_return(resp)
+
+      Sendio::Batch.send([{ from: "me" }], options: { idempotency_key: "123" })
+
+      expect(HTTParty).to have_received(:send).with(
+        :post,
+        "#{Sendio::Request::BASE_URL}emails/batch",
+        {
+          headers: {
+            "Content-Type" => "application/json",
+            "Accept" => "application/json",
+            "Authorization" => "Bearer mx_123",
+            "User-Agent" => "sendio-ruby:#{Sendio::VERSION}",
+            "Idempotency-Key" => "123"
+          },
+          body: [{ from: "me" }].to_json
+        }
+      )
+    end
+
+    it "does not send the x-batch-validation header when :batch_validation is not provided" do
+      resp = {
+        "data": [
+          { "id" => "ae2014de-c168-4c61-8267-70d2662a1ce1" },
+          { "id" => "faccb7a5-8a28-4e9a-ac64-8da1cc3bc1cb" }
+        ]
+      }
+
+      allow(resp).to receive(:body).and_return(resp)
+      allow(HTTParty).to receive(:send).and_return(resp)
+
+      Sendio::Batch.send([{ from: "me" }])
+
+      expect(HTTParty).to have_received(:send).with(
+        :post,
+        "#{Sendio::Request::BASE_URL}emails/batch",
+        {
+          headers: {
+            "Content-Type" => "application/json",
+            "Accept" => "application/json",
+            "Authorization" => "Bearer mx_123",
+            "User-Agent" => "sendio-ruby:#{Sendio::VERSION}",
+          },
+          body: [{ from: "me" }].to_json
+        }
+      )
+    end
+
+    it "sends the x-batch-validation header when :batch_validation is set to permissive" do
+      resp = {
+        "data": [
+          { "id" => "ae2014de-c168-4c61-8267-70d2662a1ce1" }
+        ],
+        "errors": [
+          { "index" => 1, "message" => "Invalid email address" }
+        ]
+      }
+
+      allow(resp).to receive(:body).and_return(resp)
+      allow(HTTParty).to receive(:send).and_return(resp)
+
+      Sendio::Batch.send([{ from: "me" }], options: { batch_validation: "permissive" })
+
+      expect(HTTParty).to have_received(:send).with(
+        :post,
+        "#{Sendio::Request::BASE_URL}emails/batch",
+        {
+          headers: {
+            "Content-Type" => "application/json",
+            "Accept" => "application/json",
+            "Authorization" => "Bearer mx_123",
+            "User-Agent" => "sendio-ruby:#{Sendio::VERSION}",
+            "x-batch-validation" => "permissive"
+          },
+          body: [{ from: "me" }].to_json
+        }
+      )
+    end
+
+    it "sends the x-batch-validation header when :batch_validation is set to strict" do
+      resp = {
+        "data": [
+          { "id" => "ae2014de-c168-4c61-8267-70d2662a1ce1" },
+          { "id" => "faccb7a5-8a28-4e9a-ac64-8da1cc3bc1cb" }
+        ]
+      }
+
+      allow(resp).to receive(:body).and_return(resp)
+      allow(HTTParty).to receive(:send).and_return(resp)
+
+      Sendio::Batch.send([{ from: "me" }], options: { batch_validation: "strict" })
+
+      expect(HTTParty).to have_received(:send).with(
+        :post,
+        "#{Sendio::Request::BASE_URL}emails/batch",
+        {
+          headers: {
+            "Content-Type" => "application/json",
+            "Accept" => "application/json",
+            "Authorization" => "Bearer mx_123",
+            "User-Agent" => "sendio-ruby:#{Sendio::VERSION}",
+            "x-batch-validation" => "strict"
+          },
+          body: [{ from: "me" }].to_json
+        }
+      )
+    end
+
+    it "handles response with errors array in permissive mode" do
+      resp = {
+        "data": [
+          { "id" => "ae2014de-c168-4c61-8267-70d2662a1ce1" }
+        ],
+        "errors": [
+          {
+            "index" => 1,
+            "message" => "The 'to' field must be a valid email address"
+          }
+        ]
+      }
+
+      params = [
+        {
+          "from": "from@e.io",
+          "to": ["valid@email.com"],
+          "text": "testing",
+          "subject": "Hey",
+        },
+        {
+          "from": "from@e.io",
+          "to": ["invalid-email"],
+          "text": "testing",
+          "subject": "Hello",
+        },
+      ]
+
+      allow_any_instance_of(Sendio::Request).to receive(:perform).and_return(resp)
+
+      result = Sendio::Batch.send(params, options: { batch_validation: "permissive" })
+
+      expect(result[:data].length).to eq 1
+      expect(result[:errors]).not_to be_nil
+      expect(result[:errors].length).to eq 1
+      expect(result[:errors][0]["index"]).to eq 1
+      expect(result[:errors][0]["message"]).to include("valid email address")
+    end
+
+    it "sends batch email with templates" do
+      resp = {
+        "data": [
+          { "id" => "ae2014de-c168-4c61-8267-70d2662a1ce1" },
+          { "id" => "faccb7a5-8a28-4e9a-ac64-8da1cc3bc1cb" }
+        ]
+      }
+
+      params = [
+        {
+          from: "from@e.io",
+          to: ["email1@email.com"],
+          template: {
+            id: "d91cd9bd-f5ab-4bbe-89c8-c890a4caced4",
+            variables: {
+              name: "Alice",
+              age: 30
+            }
+          }
+        },
+        {
+          from: "from@e.io",
+          to: ["email2@email.com"],
+          template: {
+            id: "d91cd9bd-f5ab-4bbe-89c8-c890a4caced4",
+            variables: {
+              name: "Bob",
+              age: 25
+            }
+          }
+        }
+      ]
+
+      allow_any_instance_of(Sendio::Request).to receive(:perform).and_return(resp)
+      emails = Sendio::Batch.send(params)
+      expect(emails[:data].length).to eq 2
+    end
+  end
+end

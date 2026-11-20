@@ -1,0 +1,106 @@
+# frozen_string_literal: true
+
+require_relative "../lib/sendio"
+
+raise if ENV["SENDIO_API_KEY"].nil?
+
+Sendio.api_key = ENV["SENDIO_API_KEY"]
+
+def example
+
+  params = {
+    email: "steve@example.com",
+    first_name: "Steve",
+    last_name: "Woz",
+    unsubscribed: false,
+  }
+
+  contact = Sendio::Contacts.create(params)
+  puts "Contact created: #{contact}"
+
+  update_params = {
+    email: params[:email],
+    # id: contact[:id],
+    unsubscribed: false,
+    first_name: "Updated",
+  }
+
+  retrieved = Sendio::Contacts.get(id: contact[:id])
+  puts "Retrived contact by ID"
+  puts retrieved
+
+  retrieved_by_email = Sendio::Contacts.get(email: params[:email])
+  puts "Retrived contact by Email"
+  puts retrieved_by_email
+
+  updated = Sendio::Contacts.update(update_params)
+  puts "Updated contact: #{updated}"
+
+  contacts = Sendio::Contacts.list
+  puts contacts
+
+  # Example with pagination
+  paginated_contacts = Sendio::Contacts.list(limit: 10)
+  puts "Paginated contacts (limit 10):"
+  puts paginated_contacts
+
+  # === Contact Topics ===
+  puts "\n=== Contact Topics ==="
+
+  # Create a topic first (required for contact topics operations)
+  topic_params = {
+    name: "Product Updates #{Time.now.to_i}",
+    description: "Updates about our products",
+    default_subscription: "opt_out"
+  }
+
+  topic = Sendio::Topics.create(topic_params)
+  puts "Topic created: #{topic}"
+  topic_id = topic[:id]
+
+  # List contact topics
+  puts "\nListing contact topics..."
+  contact_topics = Sendio::Contacts::Topics.list(id: contact[:id])
+  puts "Contact topics: #{contact_topics}"
+
+  # Update contact topic subscriptions - opt in to the topic
+  puts "\nOpting in to topic..."
+  update_topics_params = {
+    id: contact[:id],
+    topics: [
+      { id: topic_id, subscription: "opt_in" }
+    ]
+  }
+
+  updated_topics = Sendio::Contacts::Topics.update(update_topics_params)
+  puts "Updated topic subscription: #{updated_topics}"
+
+  # List contact topics again to see the updated subscription
+  puts "\nListing contact topics after opt-in..."
+  contact_topics_after = Sendio::Contacts::Topics.list(id: contact[:id])
+  puts "Contact topics after update: #{contact_topics_after}"
+
+  # Update contact topic subscriptions - opt out from the topic
+  puts "\nOpting out from topic..."
+  update_topics_params[:topics] = [
+    { id: topic_id, subscription: "opt_out" }
+  ]
+
+  updated_topics_opt_out = Sendio::Contacts::Topics.update(update_topics_params)
+  puts "Opted out from topic: #{updated_topics_opt_out}"
+
+  # Clean up: delete the topic
+  puts "\nCleaning up topic..."
+  Sendio::Topics.remove(topic_id)
+  puts "Topic deleted"
+
+  # delete by id
+  del = Sendio::Contacts.remove(id: contact[:id])
+
+  # delete by email
+  # del = Sendio::Contacts.remove(email: "steve@example.com")
+
+  puts "Deleted #{del}"
+end
+
+example

@@ -1,0 +1,191 @@
+# frozen_string_literal: true
+
+RSpec.describe "Emails::Receiving::Attachments" do
+  before do
+    Sendio.api_key = "mx_123"
+  end
+
+  describe "get" do
+    it "should retrieve an attachment from a received email" do
+      resp = {
+        "object" => "attachment",
+        "id" => "2a0c9ce0-3112-4728-976e-47ddcd16a318",
+        "filename" => "avatar.png",
+        "content_type" => "image/png",
+        "content_disposition" => "inline",
+        "content_id" => "img001",
+        "download_url" => "https://inbound-cdn.send.io/4ef9a417-02e9-4d39-ad75-9611e0fcc33c/attachments/2a0c9ce0-3112-4728-976e-47ddcd16a318?some-params=example&signature=sig-123",
+        "expires_at" => "2025-10-17T14:29:41.521+00:00"
+      }
+      allow(resp).to receive(:body).and_return(resp)
+      allow(HTTParty).to receive(:send).and_return(resp)
+
+      attachment = Sendio::Emails::Receiving::Attachments.get(
+        id: "2a0c9ce0-3112-4728-976e-47ddcd16a318",
+        email_id: "4ef9a417-02e9-4d39-ad75-9611e0fcc33c"
+      )
+
+      expect(attachment[:object]).to eql("attachment")
+      expect(attachment[:id]).to eql("2a0c9ce0-3112-4728-976e-47ddcd16a318")
+      expect(attachment[:filename]).to eql("avatar.png")
+      expect(attachment[:content_type]).to eql("image/png")
+      expect(attachment[:download_url]).to include("inbound-cdn.send.io")
+    end
+
+    it "should call the correct API endpoint" do
+      resp = {
+        "object" => "attachment",
+        "id" => "2a0c9ce0-3112-4728-976e-47ddcd16a318"
+      }
+      allow(resp).to receive(:body).and_return(resp)
+      allow(HTTParty).to receive(:send).and_return(resp)
+
+      Sendio::Emails::Receiving::Attachments.get(
+        id: "2a0c9ce0-3112-4728-976e-47ddcd16a318",
+        email_id: "4ef9a417-02e9-4d39-ad75-9611e0fcc33c"
+      )
+
+      expect(HTTParty).to have_received(:send).with(
+        :get,
+        "#{Sendio::Request::BASE_URL}emails/receiving/4ef9a417-02e9-4d39-ad75-9611e0fcc33c/attachments/2a0c9ce0-3112-4728-976e-47ddcd16a318",
+        hash_including(
+          headers: {
+            "Content-Type" => "application/json",
+            "Accept" => "application/json",
+            "Authorization" => "Bearer mx_123",
+            "User-Agent" => "sendio-ruby:#{Sendio::VERSION}"
+          }
+        )
+      )
+    end
+
+    it "should raise an error when attachment is not found" do
+      resp = {
+        "statusCode" => 404,
+        "name" => "not_found",
+        "message" => "Attachment not found"
+      }
+      allow(resp).to receive(:body).and_return(resp)
+      allow(HTTParty).to receive(:send).and_return(resp)
+
+      expect {
+        Sendio::Emails::Receiving::Attachments.get(
+          id: "invalid_id",
+          email_id: "invalid_email_id"
+        )
+      }.to raise_error(
+        Sendio::Error::NotFoundError,
+        /Attachment not found/
+      )
+    end
+  end
+
+  describe "list" do
+    it "should list attachments from a received email without parameters" do
+      resp = {
+        "object" => "list",
+        "has_more" => false,
+        "data" => [
+          {
+            "id" => "2a0c9ce0-3112-4728-976e-47ddcd16a318",
+            "filename" => "avatar.png",
+            "content_type" => "image/png",
+            "content_disposition" => "inline",
+            "content_id" => "img001",
+            "download_url" => "https://inbound-cdn.send.io/4ef9a417-02e9-4d39-ad75-9611e0fcc33c/attachments/2a0c9ce0-3112-4728-976e-47ddcd16a318?some-params=example&signature=sig-123",
+            "expires_at" => "2025-10-17T14:29:41.521+00:00"
+          }
+        ]
+      }
+      allow(resp).to receive(:body).and_return(resp)
+      allow(HTTParty).to receive(:send).and_return(resp)
+
+      result = Sendio::Emails::Receiving::Attachments.list(
+        email_id: "4ef9a417-02e9-4d39-ad75-9611e0fcc33c"
+      )
+
+      expect(result[:object]).to eql("list")
+      expect(result[:has_more]).to eql(false)
+      expect(result[:data].length).to eql(1)
+      expect(result[:data].first["filename"]).to eql("avatar.png")
+    end
+
+    it "should list attachments with limit parameter" do
+      resp = {
+        "object" => "list",
+        "has_more" => false,
+        "data" => []
+      }
+      allow(resp).to receive(:body).and_return(resp)
+      allow(HTTParty).to receive(:send).and_return(resp)
+
+      result = Sendio::Emails::Receiving::Attachments.list(
+        email_id: "4ef9a417-02e9-4d39-ad75-9611e0fcc33c",
+        limit: 50
+      )
+
+      expect(HTTParty).to have_received(:send) do |method, url, options|
+        expect(method).to eq(:get)
+        expect(url).to include("emails/receiving/4ef9a417-02e9-4d39-ad75-9611e0fcc33c/attachments")
+        expect(url).to include("limit=50")
+      end
+      expect(result[:object]).to eql("list")
+      expect(result[:has_more]).to eql(false)
+    end
+
+    it "should list attachments with pagination parameters" do
+      resp = {
+        "object" => "list",
+        "has_more" => true,
+        "data" => []
+      }
+      allow(resp).to receive(:body).and_return(resp)
+      allow(HTTParty).to receive(:send).and_return(resp)
+
+      result = Sendio::Emails::Receiving::Attachments.list(
+        email_id: "4ef9a417-02e9-4d39-ad75-9611e0fcc33c",
+        limit: 20,
+        after: "cursor_123",
+        before: "cursor_456"
+      )
+
+      expect(HTTParty).to have_received(:send) do |method, url, options|
+        expect(method).to eq(:get)
+        expect(url).to include("emails/receiving/4ef9a417-02e9-4d39-ad75-9611e0fcc33c/attachments")
+        expect(url).to include("limit=20")
+        expect(url).to include("after=cursor_123")
+        expect(url).to include("before=cursor_456")
+      end
+      expect(result[:object]).to eql("list")
+      expect(result[:has_more]).to eql(true)
+    end
+
+    it "should call the correct API endpoint for list" do
+      resp = {
+        "object" => "list",
+        "has_more" => false,
+        "data" => []
+      }
+      allow(resp).to receive(:body).and_return(resp)
+      allow(HTTParty).to receive(:send).and_return(resp)
+
+      Sendio::Emails::Receiving::Attachments.list(
+        email_id: "4ef9a417-02e9-4d39-ad75-9611e0fcc33c"
+      )
+
+      expect(HTTParty).to have_received(:send).with(
+        :get,
+        "#{Sendio::Request::BASE_URL}emails/receiving/4ef9a417-02e9-4d39-ad75-9611e0fcc33c/attachments",
+        hash_including(
+          headers: {
+            "Content-Type" => "application/json",
+            "Accept" => "application/json",
+            "Authorization" => "Bearer mx_123",
+            "User-Agent" => "sendio-ruby:#{Sendio::VERSION}"
+          }
+        )
+      )
+    end
+  end
+end
+

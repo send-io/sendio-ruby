@@ -1,0 +1,416 @@
+# frozen_string_literal: true
+
+RSpec.describe "Contacts" do
+
+  let(:audience_id) { "78b8d3bc-a55a-45a3-aee6-6ec0a5e13d7e" }
+
+  describe "create contact" do
+
+    before do
+      Sendio.configure do |config|
+        config.api_key = "mx_123"
+      end
+    end
+
+    it "should create a contact record" do
+      resp = {
+        "object": "contact",
+        "id": "479e3145-dd38-476b-932c-529ceb705947"
+      }
+
+      params = {
+        audience_id: audience_id,
+        email: "steve@woz.com",
+        first_name: "Steve",
+        last_name: "Woz",
+        unsubscribed: false,
+      }
+
+      allow_any_instance_of(Sendio::Request).to receive(:perform).and_return(resp)
+      contact = Sendio::Contacts.create(params)
+      expect(contact[:id]).to eql("479e3145-dd38-476b-932c-529ceb705947")
+      expect(contact[:object]).to eql("contact")
+    end
+  end
+
+  describe "get contact" do
+
+    it "should retrieve a contact by id" do
+
+      resp = {
+        "object": "contact",
+        "id": "e169aa45-1ecf-4183-9955-b1499d5701d3",
+        "email": "steve.wozniak@gmail.com",
+        "first_name": "Steve",
+        "last_name": "Wozniak",
+        "created_at": "2023-10-06T23:47:56.678+00:00",
+        "unsubscribed": false
+      }
+
+      allow(resp).to receive(:body).and_return(resp)
+      allow(HTTParty).to receive(:send).and_return(resp)
+
+      contact = Sendio::Contacts.get(id: resp[:id], audience_id: audience_id)
+
+      expect(contact[:object]).to eql "contact"
+      expect(contact[:id]).to eql "e169aa45-1ecf-4183-9955-b1499d5701d3"
+      expect(contact[:first_name]).to eql "Steve"
+      expect(contact[:last_name]).to eql "Wozniak"
+      expect(contact[:email]).to eql "steve.wozniak@gmail.com"
+      expect(contact[:unsubscribed]).to be false
+      expect(contact[:created_at]).to eql "2023-10-06T23:47:56.678+00:00"
+    end
+
+    it "should retrieve a contact by email" do
+      resp = {
+        "object": "contact",
+        "id": "e169aa45-1ecf-4183-9955-b1499d5701d3",
+        "email": "steve.wozniak@gmail.com",
+        "first_name": "Steve",
+        "last_name": "Wozniak",
+        "created_at": "2023-10-06T23:47:56.678+00:00",
+        "unsubscribed": false
+      }
+
+      allow(resp).to receive(:body).and_return(resp)
+      allow(HTTParty).to receive(:send).and_return(resp)
+
+      contact = Sendio::Contacts.get(email: resp[:email], audience_id: audience_id)
+
+      expect(contact[:object]).to eql "contact"
+      expect(contact[:id]).to eql "e169aa45-1ecf-4183-9955-b1499d5701d3"
+      expect(contact[:first_name]).to eql "Steve"
+      expect(contact[:last_name]).to eql "Wozniak"
+      expect(contact[:email]).to eql "steve.wozniak@gmail.com"
+      expect(contact[:unsubscribed]).to be false
+      expect(contact[:created_at]).to eql "2023-10-06T23:47:56.678+00:00"
+    end
+  end
+
+  describe "list contacts" do
+
+    let(:resp) {
+      {
+        "object": "list",
+        "data": [
+          {
+            "id" => "e169aa45-1ecf-4183-9955-b1499d5701d3",
+            "email" => "steve.wozniak@gmail.com",
+            "first_name" => "Steve",
+            "last_name" => "Wozniak",
+            "created_at" => "2023-10-06T23:47:56.678+00:00",
+            "unsubscribed" => false
+          }
+        ]
+      }
+    }
+
+    it "should list contacts (new style with hash)" do
+      allow_any_instance_of(Sendio::Request).to receive(:perform).and_return(resp)
+
+      contacts = Sendio::Contacts.list(audience_id: audience_id)
+
+      expect(contacts[:object]).to eql "list"
+      expect(contacts[:data].length).to eql 1
+      expect(contacts[:data][0]["id"]).to eql "e169aa45-1ecf-4183-9955-b1499d5701d3"
+      expect(contacts[:data][0]["first_name"]).to eql "Steve"
+      expect(contacts[:data][0]["last_name"]).to eql "Wozniak"
+      expect(contacts[:data][0]["email"]).to eql "steve.wozniak@gmail.com"
+      expect(contacts[:data][0]["unsubscribed"]).to be false
+    end
+
+    it "should list contacts with pagination" do
+      allow_any_instance_of(Sendio::Request).to receive(:perform).and_return(resp)
+
+      contacts = Sendio::Contacts.list(audience_id: audience_id, limit: 10)
+
+      expect(contacts[:object]).to eql "list"
+      expect(contacts[:data].length).to eql 1
+      expect(contacts[:data][0]["id"]).to eql "e169aa45-1ecf-4183-9955-b1499d5701d3"
+      expect(contacts[:data][0]["first_name"]).to eql "Steve"
+      expect(contacts[:data][0]["last_name"]).to eql "Wozniak"
+      expect(contacts[:data][0]["email"]).to eql "steve.wozniak@gmail.com"
+      expect(contacts[:data][0]["unsubscribed"]).to be false
+    end
+
+    it "should list contacts by segment" do
+      segment_id = "78261eea-8f8b-4381-83c6-79fa7120f1cf"
+      mock_response = Sendio::Response.new(resp, {})
+      mock_request = double("Sendio::Request")
+      allow(mock_request).to receive(:perform).and_return(mock_response)
+      expect(Sendio::Request).to receive(:new).with("segments/#{segment_id}/contacts", {}, "get").and_return(mock_request)
+
+      contacts = Sendio::Contacts.list(segment_id: segment_id)
+      
+      expect(contacts[:object]).to eql "list"
+      expect(contacts[:data].length).to eql 1
+      expect(contacts[:data][0]["id"]).to eql "e169aa45-1ecf-4183-9955-b1499d5701d3"
+      expect(contacts[:data][0]["first_name"]).to eql "Steve"
+      expect(contacts[:data][0]["last_name"]).to eql "Wozniak"
+      expect(contacts[:data][0]["email"]).to eql "steve.wozniak@gmail.com"
+      expect(contacts[:data][0]["unsubscribed"]).to be false
+    end
+  end
+
+  describe "remove contact" do
+    it "should remove contact by id" do
+
+      resp = {
+        "object": "contact",
+        "id": "520784e2-887d-4c25-b53c-4ad46ad38100",
+        "deleted": true
+      }
+
+      allow(resp).to receive(:body).and_return(resp)
+      allow(HTTParty).to receive(:send).and_return(resp)
+
+      deleted = Sendio::Contacts.remove(id: resp[:id], audience_id: audience_id)
+      expect(deleted[:object]).to eql("contact")
+      expect(deleted[:id]).to eql(resp[:id])
+      expect(deleted[:deleted]).to be true
+    end
+  end
+
+  describe "update contact" do
+
+    before do
+      Sendio.configure do |config|
+        config.api_key = "mx_123"
+      end
+    end
+
+    it "should update a contact record" do
+      resp = {
+        "object": "contact",
+        "id": "479e3145-dd38-476b-932c-529ceb705947"
+      }
+
+      update_params = {
+        audience_id: audience_id,
+        id: "479e3145-dd38-476b-932c-529ceb705947",
+        unsubscribed: false,
+      }
+
+      allow_any_instance_of(Sendio::Request).to receive(:perform).and_return(resp)
+      contact = Sendio::Contacts.update(update_params)
+      expect(contact[:id]).to eql("479e3145-dd38-476b-932c-529ceb705947")
+      expect(contact[:object]).to eql("contact")
+    end
+
+    it "raise when required fields are not provided" do
+      begin
+        Sendio::Contacts.update({ audience_id: "123" })
+      rescue ArgumentError => e
+        expect(e.message).to eql("Missing `id` or `email` field")
+      end
+    end
+  end
+
+  describe "global contacts (without audience_id)" do
+    before do
+      Sendio.configure do |config|
+        config.api_key = "mx_123"
+      end
+    end
+
+    it "should create a global contact without audience_id" do
+      resp = {
+        "object": "contact",
+        "id": "479e3145-dd38-476b-932c-529ceb705947"
+      }
+
+      params = {
+        email: "global@example.com",
+        first_name: "Global",
+        last_name: "Contact"
+      }
+
+      allow_any_instance_of(Sendio::Request).to receive(:perform).and_return(resp)
+      contact = Sendio::Contacts.create(params)
+      expect(contact[:id]).to eql("479e3145-dd38-476b-932c-529ceb705947")
+      expect(contact[:object]).to eql("contact")
+    end
+
+    it "should get a global contact by id without audience_id" do
+      resp = {
+        "object": "contact",
+        "id": "e169aa45-1ecf-4183-9955-b1499d5701d3",
+        "email": "global@example.com",
+        "first_name": "Global",
+        "last_name": "Contact",
+        "created_at": "2023-10-06T23:47:56.678+00:00",
+        "unsubscribed": false
+      }
+
+      allow(resp).to receive(:body).and_return(resp)
+      allow(HTTParty).to receive(:send).and_return(resp)
+
+      contact = Sendio::Contacts.get(id: resp[:id])
+
+      expect(contact[:object]).to eql "contact"
+      expect(contact[:id]).to eql "e169aa45-1ecf-4183-9955-b1499d5701d3"
+      expect(contact[:first_name]).to eql "Global"
+      expect(contact[:last_name]).to eql "Contact"
+      expect(contact[:email]).to eql "global@example.com"
+    end
+
+    it "should list global contacts without audience_id" do
+      resp = {
+        "object": "list",
+        "data": [
+          {
+            "id" => "e169aa45-1ecf-4183-9955-b1499d5701d3",
+            "email" => "global@example.com",
+            "first_name" => "Global",
+            "last_name" => "Contact",
+            "created_at" => "2023-10-06T23:47:56.678+00:00",
+            "unsubscribed" => false
+          }
+        ]
+      }
+
+      allow_any_instance_of(Sendio::Request).to receive(:perform).and_return(resp)
+      contacts = Sendio::Contacts.list
+      expect(contacts[:object]).to eql "list"
+      expect(contacts[:data].length).to eql 1
+      expect(contacts[:data][0]["id"]).to eql "e169aa45-1ecf-4183-9955-b1499d5701d3"
+      expect(contacts[:data][0]["email"]).to eql "global@example.com"
+    end
+
+    it "should update a global contact without audience_id" do
+      resp = {
+        "object": "contact",
+        "id": "479e3145-dd38-476b-932c-529ceb705947"
+      }
+
+      update_params = {
+        id: "479e3145-dd38-476b-932c-529ceb705947",
+        first_name: "Updated",
+        unsubscribed: true
+      }
+
+      allow_any_instance_of(Sendio::Request).to receive(:perform).and_return(resp)
+      contact = Sendio::Contacts.update(update_params)
+      expect(contact[:id]).to eql("479e3145-dd38-476b-932c-529ceb705947")
+      expect(contact[:object]).to eql("contact")
+    end
+
+    it "should remove a global contact by id without audience_id" do
+      resp = {
+        "object": "contact",
+        "id": "520784e2-887d-4c25-b53c-4ad46ad38100",
+        "deleted": true
+      }
+
+      allow(resp).to receive(:body).and_return(resp)
+      allow(HTTParty).to receive(:send).and_return(resp)
+
+      deleted = Sendio::Contacts.remove(id: resp[:id])
+      expect(deleted[:object]).to eql("contact")
+      expect(deleted[:id]).to eql(resp[:id])
+      expect(deleted[:deleted]).to be true
+    end
+  end
+
+  describe "properties handling" do
+    before do
+      Sendio.configure do |config|
+        config.api_key = "mx_123"
+      end
+    end
+
+    it "should include properties when creating a global contact" do
+      resp = {
+        "object": "contact",
+        "id": "479e3145-dd38-476b-932c-529ceb705947"
+      }
+
+      params = {
+        email: "test@example.com",
+        first_name: "Test",
+        properties: { custom_field: "value" }
+      }
+
+      # Verify that properties are passed to the Request
+      expect(Sendio::Request).to receive(:new).with(
+        "contacts",
+        hash_including(properties: { custom_field: "value" }),
+        "post"
+      ).and_call_original
+
+      allow_any_instance_of(Sendio::Request).to receive(:perform).and_return(resp)
+      Sendio::Contacts.create(params)
+    end
+
+    it "should exclude properties when creating an audience-scoped contact" do
+      resp = {
+        "object": "contact",
+        "id": "479e3145-dd38-476b-932c-529ceb705947"
+      }
+
+      params = {
+        audience_id: "aud_123",
+        email: "test@example.com",
+        first_name: "Test",
+        properties: { custom_field: "value" }
+      }
+
+      # Verify that properties are NOT passed to the Request
+      expect(Sendio::Request).to receive(:new).with(
+        "audiences/aud_123/contacts",
+        hash_excluding(:properties),
+        "post"
+      ).and_call_original
+
+      allow_any_instance_of(Sendio::Request).to receive(:perform).and_return(resp)
+      Sendio::Contacts.create(params)
+    end
+
+    it "should include properties when updating a global contact" do
+      resp = {
+        "object": "contact",
+        "id": "479e3145-dd38-476b-932c-529ceb705947"
+      }
+
+      params = {
+        id: "479e3145-dd38-476b-932c-529ceb705947",
+        first_name: "Updated",
+        properties: { custom_field: "new_value" }
+      }
+
+      # Verify that properties are passed to the Request
+      expect(Sendio::Request).to receive(:new).with(
+        "contacts/479e3145-dd38-476b-932c-529ceb705947",
+        hash_including(properties: { custom_field: "new_value" }),
+        "patch"
+      ).and_call_original
+
+      allow_any_instance_of(Sendio::Request).to receive(:perform).and_return(resp)
+      Sendio::Contacts.update(params)
+    end
+
+    it "should exclude properties when updating an audience-scoped contact" do
+      resp = {
+        "object": "contact",
+        "id": "479e3145-dd38-476b-932c-529ceb705947"
+      }
+
+      params = {
+        audience_id: "aud_123",
+        id: "479e3145-dd38-476b-932c-529ceb705947",
+        first_name: "Updated",
+        properties: { custom_field: "new_value" }
+      }
+
+      # Verify that properties are NOT passed to the Request
+      expect(Sendio::Request).to receive(:new).with(
+        "audiences/aud_123/contacts/479e3145-dd38-476b-932c-529ceb705947",
+        hash_excluding(:properties),
+        "patch"
+      ).and_call_original
+
+      allow_any_instance_of(Sendio::Request).to receive(:perform).and_return(resp)
+      Sendio::Contacts.update(params)
+    end
+  end
+end
